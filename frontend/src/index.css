@@ -1,0 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+:root {
+  --bg: #ffffff; --ink: #0f172a; --muted: #64748b; --line: #e2e8f0; --soft: #f3f5f8;
+  --blue: #1f5fb8; --blue-soft: #e8eef8; --blue-line: #b9cdea;
+  --amber: #8a5a00; --amber-soft: #fdf0d8;
+  font-family: Inter, system-ui, sans-serif; color: var(--ink); background: var(--bg);
+}
+body { margin: 0; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
