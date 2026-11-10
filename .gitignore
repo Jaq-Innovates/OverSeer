@@ -28,3 +28,6 @@ data/cache/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local agent/plugin state
+.omc/
