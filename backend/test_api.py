@@ -42,7 +42,7 @@ def test_all():
     assert c.get("/events", params={"source": "acled"}).json()["items"][0]["id"] == "ACLED-USA1001"
     assert c.get("/events/ACLED-USA1001").json()["linked_posts"] == 1
     assert c.get("/events/nope").status_code == 404
-    assert c.get("/posts", params={"persona_type": "Local resident"}).json()[0]["persona"]["handle"] == "rosad_cs"
+    assert c.get("/posts", params={"persona_type": "Local resident"}).json()["items"][0]["persona"]["handle"] == "rosad_cs"
     assert c.post("/ingest/acled", json={"country": "United States", "start": "2025-03-01", "end": "2025-03-30"}).status_code == 400
 
 

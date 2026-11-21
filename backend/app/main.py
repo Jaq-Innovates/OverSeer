@@ -1,5 +1,5 @@
-from datetime import date
-
+from datetime import date, datetime
+from .schemas import EventDetailOut, EventOut, PageOut, PersonaSummary, PostOut
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -114,3 +114,78 @@ def list_personas(persona_type: str | None = None, limit: int = 50, offset: int 
     if persona_type:
         q = q.where(Persona.persona_type == persona_type)
     return s.scalars(q.limit(min(limit, 500)).offset(offset)).all()
+
+# ---------- Events ----------
+
+@app.get("/events", response_model=PageOut[EventOut])
+def list_events(source: str | None = None, country: str | None = None, event_type: str | None = None,
+                start: date | None = None, end: date | None = None,
+                limit: int = 50, offset: int = 0, s: Session = Depends(get_session)):
+    limit = min(limit, 500)
+    q = select(Event)
+    if source:
+        q = q.where(Event.source == source)
+    if country:
+        q = q.where(Event.country == country)
+    if event_type:
+        q = q.where(Event.event_type == event_type)
+    if start:
+        q = q.where(Event.event_date >= start)
+    if end:
+        q = q.where(Event.event_date <= end)
+    total = s.scalar(select(func.count()).select_from(q.subquery()))
+    rows = s.scalars(q.order_by(Event.event_date.desc()).limit(limit).offset(offset)).all()
+    return {"total": total, "limit": limit, "offset": offset, "items": [_event(e) for e in rows]}
+
+
+@app.get("/events/{event_id}", response_model=EventDetailOut)
+def get_event(event_id: str, s: Session = Depends(get_session)):
+    e = s.get(Event, event_id)
+    if not e:
+        raise HTTPException(404, "Event not found")
+    posts = s.scalar(select(func.count()).where(Post.event_id == event_id))
+    return {**_event(e), "linked_posts": posts, "raw": e.raw}
+
+
+def _event(e: Event):
+    return {k: getattr(e, k) for k in ("id", "source", "event_date", "event_type", "sub_event_type", "actor1",
+                                       "actor2", "country", "location", "lat", "lon", "fatalities", "tone",
+                                       "source_url", "notes")}
+
+@app.get("/posts", response_model=PageOut[PostOut])
+def list_posts(run_id: int | None = None, persona_id: str | None = None, persona_type: str | None = None,
+               event_id: str | None = None, narrative: str | None = None, source: str | None = None,
+               start: datetime | None = None, end: datetime | None = None,
+               limit: int = 50, offset: int = 0, s: Session = Depends(get_session)):
+    limit = min(limit, 500)
+    q = (select(Post, Persona, Event)
+         .join(Persona, Post.persona_id == Persona.id)
+         .outerjoin(Event, Post.event_id == Event.id))
+    if run_id:
+        q = q.where(Post.run_id == run_id)
+    if persona_id:
+        q = q.where(Post.persona_id == persona_id)
+    if persona_type:
+        q = q.where(Persona.persona_type == persona_type)
+    if event_id:
+        q = q.where(Post.event_id == event_id)
+    if narrative:
+        q = q.where(Post.narrative == narrative)
+    if source:
+        q = q.where(Event.source == source)
+    if start:
+        q = q.where(Post.sim_time >= start)
+    if end:
+        q = q.where(Post.sim_time <= end)
+    total = s.scalar(select(func.count()).select_from(q.subquery()))
+    rows = s.execute(q.order_by(Post.sim_time.desc()).limit(limit).offset(offset)).all()
+    return {"total": total, "limit": limit, "offset": offset, "items": [_post(p, u, ev) for p, u, ev in rows]}
+
+
+def _post(p: Post, u: Persona, ev: Event | None):
+    return {
+        "id": p.id, "run_id": p.run_id, "text": p.text, "timestamp": p.sim_time,
+        "persona": {"id": u.id, "name": u.name, "handle": u.handle, "persona_type": u.persona_type},
+        "source_event": {"id": ev.id, "label": f"{ev.event_type}, {ev.location}"} if ev else None,
+        "parent_id": p.parent_id, "narrative": p.narrative, "synthetic": p.is_synthetic,
+    }
